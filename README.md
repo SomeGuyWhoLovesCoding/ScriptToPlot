@@ -76,6 +76,7 @@ Here's an example of a character Map.
 Simple. Create a "Map.txt" and write this:
 
 ```
+[CharacterName] = [CharacterGUID]
 ```
 
 (A Map should contin your personal plotagon character dictionary of the character names and their guid's)
