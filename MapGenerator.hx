@@ -5,7 +5,6 @@ import sys.io.File;
 
 class MapGenerator {
 	static var cameraTypeNames:Map<Int, String> = [
-		0 => "skipping establishing shot",
 		1 => "establishing shot",
 		2 => "in dialogue mode",
 		3 => "in interaction mode",
@@ -14,7 +13,8 @@ class MapGenerator {
 		6 => "moving forward",
 		7 => "moving backward",
 		8 => "wide shot",
-		9 => "still"
+		9 => "still",
+		10 => "skipping establishing shot"
 	];
 
 	static var effectNames:Map<String, String> = [
