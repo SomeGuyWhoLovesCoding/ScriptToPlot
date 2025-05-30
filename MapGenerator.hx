@@ -27,7 +27,7 @@ class MapGenerator {
 		"/vignette" => "Vignette",
 		"/retro" => "Sepia",
 		"/old" => "BlackAndWhite",
-		"/setfov" => "SetFov",
+		"/setfov" => "SetFov", // Can be between 0.5 and 1.5 as there is known evidence of it just by trying to go past 1.5 or below 0.5
 		"/normal" => "PreviewBlit" // I gotta ask, why is /normal named PreviewBlit???
 	];
 
@@ -188,6 +188,9 @@ class MapGenerator {
 					}
 					// If we only have one effect then why did we need to do this then!?
 					// Cuz if you remove the check then the only effect command's text will output "/null".
+					if (split[1] == "setfov") {
+						split[2] = Std.string(Math.min(Math.max(Std.parseInt(split[2]), 1.5), 0.5));
+					}
 					instruction.parameters.text = {
 						id: "",
 						text: StringTools.trim(split2.length > 2 ? '/' + split2[1] : split[1])
