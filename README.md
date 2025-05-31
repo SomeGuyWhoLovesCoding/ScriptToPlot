@@ -71,6 +71,10 @@ android.androidfemale]- waving]- And I'm female android!
 
 Here's an example of a character Map.
 
+## What's "Character1" at the third argument?
+
+You can export lines for a specific character's voice (with variants) to automate the process of recording Acapela tts voicelines and adding them into your plotagon project if you paste it onto the demo, find a way to modify the text limit for the dialouge box, paste it all into .
+
 ## And how do I use it?
 
 Simple. Create a "Map.txt" and write this:
@@ -84,7 +88,7 @@ Simple. Create a "Map.txt" and write this:
 If you want to import all your own characters to the file, read over every one of the pcd files at the root of C:\ProgramData\PLOTAGON_PROGRAMDATA_[GUID]\Bundles
 
 ```bat
-ScriptToPlot Map.txt "Demo Script.txt"
+ScriptToPlot Map.txt "Demo Script.txt" "Character1, Character2, Character3"
 ```
 
 Replace the string with your txt file.

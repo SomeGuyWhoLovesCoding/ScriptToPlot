@@ -109,6 +109,18 @@ class MapGenerator {
 		var charMapPath = args[0];
 		var scriptPath = args[1];
 
+		var exportToScriptLinesOfCharacter = "";
+		var exportToScriptLinesOfCharacters = [];
+
+		if (args[2] != null) {
+			exportToScriptLinesOfCharacter = args[2];
+			exportToScriptLinesOfCharacters = exportToScriptLinesOfCharacter.split(", ");
+		}
+
+		trace(exportToScriptLinesOfCharacters);
+
+		var charLines:Array<String> = [];
+
 		// This is for presetting characters to guid's for actual plotagon plot files.
 		// NOTE: Do not change this to File.getContent.
 		// There was a bug in it that automatically added an "\r" at the end of each string in the map
@@ -328,6 +340,15 @@ class MapGenerator {
 				default:
 					instruction.type = "dialogue";
 					var character = StringTools.trim(split[0]);
+					var text = split[2] != null ? StringTools.trim(split[2]) : "";
+
+					if (exportToScriptLinesOfCharacters.length != 0) {
+						if (exportToScriptLinesOfCharacters.contains(character)) {
+							charLines.push(text);
+						}
+						continue;
+					}
+
 					instruction.parameters.character = {
 						id: map.exists(character) ? map[character] : character,
 						text: character
@@ -339,7 +360,7 @@ class MapGenerator {
 					}
 					instruction.parameters.text = {
 						id: "",
-						text: split[2] != null ? StringTools.replace(StringTools.trim(split[2]), '"', '\\"' /* For convenience */) : ""
+						text: split[2] != null ? StringTools.replace(text, '"', '\\"' /* For convenience */) : ""
 					}
 					if (!Math.isNaN(Std.parseFloat(split[3]))) instruction.parameters.volume = Std.parseFloat(split[3]);
 			}
@@ -347,7 +368,14 @@ class MapGenerator {
 			plotagonPlot.contents.instructions.push(instruction);
 		}
 
-		outputFile.writeString(myOwnStringifyCuzPlotagonForcesJsonOrdering(plotagonPlot));
+		trace(exportToScriptLinesOfCharacters.length == 0);
+		if (exportToScriptLinesOfCharacters.length == 0) {
+			outputFile.writeString(myOwnStringifyCuzPlotagonForcesJsonOrdering(plotagonPlot));
+		} else {
+			for (i in 0...charLines.length) {
+				outputFile.writeString('${charLines[i]}\n\n');
+			}
+		}
 		outputFile.close();
 	}
 
