@@ -27,6 +27,7 @@ class MapGenerator {
 		"/vignette" => "Vignette",
 		"/retro" => "Sepia",
 		"/old" => "BlackAndWhite",
+		"/bloom" => "Bloom", // I forgot to add this
 		"/setfov" => "SetFov", // Can be between 0.5 and 1.5 as there is known evidence of it just by trying to go past 1.5 or below 0.5
 		"/normal" => "PreviewBlit" // I gotta ask, why is /normal named PreviewBlit???
 	];
