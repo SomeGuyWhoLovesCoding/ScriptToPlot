@@ -73,7 +73,7 @@ Here's an example of a character Map.
 
 ## What's "Character1" at the third argument?
 
-You can export lines for a specific character's voice (with variants) to automate the process of recording Acapela tts voicelines and adding them into your plotagon project if you paste it onto the demo, find a way to modify the text limit for the dialouge box, paste it all into .
+You can export lines for a specific character's voice (with variants) to automate the process of recording Acapela tts voicelines and adding them into your plotagon project if you paste it onto the demo, find a way to modify the text limit for the dialouge box, paste it all into the box, record it all with bandicam or whatever, and drop it onto an audio editor software for you to clip and export as the selection, at a specific folder you want.
 
 ## And how do I use it?
 
