@@ -26,13 +26,13 @@ Dialogue prompts:
 Action prompts:
 
 ```
-Action]- [typeofactioninlowercasefromplotagonfiles]]- [Actor 1 from Map]]- [Actor 2 from Map]]- 
+Action]- [typeofactioninlowercasefromplotagonfiles]]- [Actor 1 from Map]]- [Actor 2 from Map]
 ```
 
 Textplate prompts:
 
 ```
-Textplate]- [Actor from Map]]- [Textplate Alignment]]- [Dialogue]
+Textplate]- [Actor from Map]]- [Textplate Alignment]]- [Dialogue]]- [Dialogue Volume]
 ```
 
 Sound prompts:
@@ -57,10 +57,6 @@ Create a blank txt file and write your script there.
 
 ## How's the script formatted?
 
-1. Make sure you don't make any blank lines. Just lines full of instruction scripts that translate directly into a .plotdoc instruction structure.
-
-2. Don't mix up the volume and camera property. You'll end up with the volume being the camera's id (whenever it's wide shot, or whatever)
-
 Your script should look like this:
 
 Scene]- spaces.greenroom]- middle1]- middle2]- android.androidmale]- android.androidfemale]- 1
@@ -73,7 +69,7 @@ Here's an example of a character Map.
 
 ## What's "Character1" at the third argument?
 
-You can export lines for a specific character's voice (with variants) to automate the process of recording Acapela tts voicelines and adding them into your plotagon project if you paste it onto the demo, find a way to modify the text limit for the dialouge box, paste it all into the box, record it all with bandicam or whatever, and drop it onto an audio editor software for you to clip and export as the selection, at a specific folder you want.
+You can export lines to txt files for a specific character's voice (with variants) to automate the process of generating recordings of Acapela tts voicelines using TextAloud's batch file converter and adding them into your plotagon project.
 
 ## And how do I use it?
 
@@ -94,3 +90,11 @@ ScriptToPlot Map.txt "Demo Script.txt" "Character1, Character2, Character3"
 Replace the string with your txt file.
 
 Then import the .plotdoc file onto C:\ProgramData\PLOTAGON_PROGRAMDATA_be8b8328-7944-4d8b-af02-de4033b549ba\Plots and load the plotagon app! You should see your imported plot right at the start.
+
+## Want some tips?
+
+1. Make sure you don't make any blank lines. Just lines full of instruction scripts that translate directly into a .plotdoc instruction structure.
+
+2. Don't mix up the volume and camera property. You'll end up with the volume being the camera's id (whenever it's wide shot, or whatever)
+
+3. Proofread before converting. You might end up writing an instruction incorrectly without noticing.
