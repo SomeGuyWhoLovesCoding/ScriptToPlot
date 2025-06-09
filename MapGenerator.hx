@@ -1,5 +1,6 @@
 package;
 
+import sys.FileSystem;
 import sys.io.File;
 //import sys.FileSystem;
 
@@ -109,12 +110,18 @@ class MapGenerator {
 		var charMapPath = args[0];
 		var scriptPath = args[1];
 
+		var plotID:String = generateGUID();
+		var plotTime = StringTools.replace(Date.now().toString(), " ", "T"); // This is naturally what plotagon uses as it's written in the unity framework
+		var outputFile = null;
+
 		var exportToScriptLinesOfCharacter = "";
 		var exportToScriptLinesOfCharacters = [];
 
 		if (args[2] != null) {
 			exportToScriptLinesOfCharacter = args[2];
 			exportToScriptLinesOfCharacters = exportToScriptLinesOfCharacter.split(", ");
+		} else {
+			outputFile = File.write('$plotID.plotdoc', false);
 		}
 
 		trace(exportToScriptLinesOfCharacters);
@@ -133,9 +140,6 @@ class MapGenerator {
 			//trace(map[parts[0]]);
 		}
 
-		var plotID:String = generateGUID();
-		var plotTime = StringTools.replace(Date.now().toString(), " ", "T"); // This is naturally what plotagon uses
-		var outputFile = File.write('$plotID.plotdoc', false);
 		var inputFile = File.getContent(scriptPath);
 
 		var plotagonPlot:PlotagonPlotFile = {
@@ -344,6 +348,10 @@ class MapGenerator {
 
 					if (exportToScriptLinesOfCharacters.length != 0) {
 						if (exportToScriptLinesOfCharacters.contains(character)) {
+							if (StringTools.contains(text, '/settime')) {
+								var howManySeconds = text.split(" ")[1];
+								text = StringTools.trim(StringTools.replace(StringTools.trim(text), '/settime $howManySeconds', ""));
+							}
 							charLines.push(text);
 						}
 						continue;
@@ -371,12 +379,15 @@ class MapGenerator {
 		trace(exportToScriptLinesOfCharacters.length == 0);
 		if (exportToScriptLinesOfCharacters.length == 0) {
 			outputFile.writeString(myOwnStringifyCuzPlotagonForcesJsonOrdering(plotagonPlot));
+			outputFile.close();
 		} else {
+			FileSystem.createDirectory(plotID);
 			for (i in 0...charLines.length) {
-				outputFile.writeString('${charLines[i]}\n\n');
+				var file = File.write('$plotID/$i.txt', false);
+				file.writeString(charLines[i]);
+				file.close();
 			}
 		}
-		outputFile.close();
 	}
 
 	// The function name is intentionally long for a reason
