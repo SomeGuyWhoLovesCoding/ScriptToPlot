@@ -277,8 +277,8 @@ class MapGenerator {
 					if (id != "none") {
 						instruction.type = "sound";
 						instruction.parameters.sound = {
-							id: id,
-							text: id
+							id: StringTools.trim(id),
+							text: StringTools.trim(id)
 						}
 					}
 					if (split[2] != null) instruction.parameters.volume = Std.parseFloat(split[2]);
