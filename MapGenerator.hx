@@ -344,7 +344,7 @@ class MapGenerator {
 				default:
 					instruction.type = "dialogue";
 					var character = StringTools.trim(split[0]);
-					var text = '<volume level="80">' + split[2] != null ? StringTools.trim(split[2]) : "";
+					var text = split[2] != null ? StringTools.trim(split[2]) : "";
 
 					if (exportToScriptLinesOfCharacters.length != 0) {
 						if (exportToScriptLinesOfCharacters.contains(character)) {
