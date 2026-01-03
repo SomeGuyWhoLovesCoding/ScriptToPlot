@@ -31,9 +31,9 @@ haxe --main Script2Plot --cpp bin
 
 ## Quick Start
 
-### 1. Create a script file (`myscript.txt`)
+### 1. Create a script file (`myscript.s2ps`)
 
-```txt
+```s2ps
 @title My Awesome Plot
 @char Hero = protagonist
 @char Villain = antagonist
@@ -54,11 +54,11 @@ Action type=push char=Villain target=Hero
 ### 2. Convert to Plotagon file
 
 ```bash
-./bin/Script2Script parse myscript.txt
+./bin/Script2Script parse myscript.s2ps
 ```
-This creates `[GUID].plotdoc` that you can import into Plotagon ().
+This creates `[GUID].plotdoc` that you can import into Plotagon.
 
-Do note that the output file (third argument) is completely optional and 
+Do note that the output file (third argument) is completely optional and is not required.
 
 ### 3. Convert Plotagon file back to script
 
@@ -69,43 +69,43 @@ Do note that the output file (third argument) is completely optional and
 ## Script Syntax Reference
 
 ### Character Definitions
-```txt
+```s2ps
 @char Name = character_id      # Define character with Plotagon ID
 @char Alias = ExistingChar     # Create alias to existing character
 @title Plot Title             # Set plot title
 ```
 
 ### Scene Instruction
-```txt
+```s2ps
 Scene scene=id loc1=l1 loc2=l2 actor1=A1 actor2=A2 camera=1 volume=0.8 extras=true
 ```
 
 ### Dialogue
-```txt
+```s2ps
 Character(expression)         # Character name with expression
 vol=0.8 cam=2                 # Optional parameters line
 Dialogue text here            # Dialogue text (can start with #)
 ```
 
 ### Actions
-```txt
+```s2ps
 Action type=hug char=C1 target=C2 cam=2
 ```
 
 ### Effects
-```txt
+```s2ps
 Effect /fadeinb /fadeoutb /fadeinw /fadeoutw
 Effect /fadeinp /fadeoutp /vignette /retro
 Effect /old /bloom:0.5 /setfov:1.2 /normal
 ```
 
 ### Textplates
-```txt
+```s2ps
 Textplate char=C1 align=center vol=0.7: Text content here
 ```
 
 ### Sound & Music
-```txt
+```s2ps
 Sound sound=id vol=0.6
 Music music=id vol=0.4
 ```
