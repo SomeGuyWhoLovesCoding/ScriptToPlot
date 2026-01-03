@@ -30,3 +30,11 @@
 *.exe
 *.out
 *.app
+
+# Haxe Exportfolder
+
+bin/
+
+# Others (yay)
+
+MapGenerator.hx

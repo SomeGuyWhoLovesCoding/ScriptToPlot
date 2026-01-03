@@ -4,6 +4,9 @@ import sys.FileSystem;
 import sys.io.File;
 import haxe.Json;
 
+
+using StringTools;
+
 // Command system class
 class CommandProcessor {
 	var commands:Map<String, Array<String>> = new Map();
@@ -56,15 +59,6 @@ class CommandProcessor {
 		
 		return output.toString();
 	}
-	
-	public function getCharacterGUID(charName:String):String {
-		if (characterGUIDs.exists(charName)) {
-			return characterGUIDs.get(charName);
-		}
-		var guid = generateGUID();
-		characterGUIDs.set(charName, guid);
-		return guid;
-	}
 }
 
 // Main parser class
@@ -82,8 +76,12 @@ class ScriptParser {
 		parserErrors = [];
 		characters = new Map();
 		
-		// First pass: extract characters and process commands
 		var lines = script.split('\n');
+		var instructions:Array<PlotagonPlotInstruction> = [];
+		var i = 0;
+		var lineNum = 0;
+		
+		// First pass: extract characters from @char commands
 		for (line in lines) {
 			var trimmed = line.trim();
 			if (trimmed.startsWith("@char ")) {
@@ -92,58 +90,105 @@ class ScriptParser {
 				if (parts.length >= 2) {
 					var name = parts[0];
 					var id = parts[1];
-					characters.set(name, { name: name, id: id, guid: generateGUID() });
+					
+					// Check if this is an alias to an existing character
+					if (characters.exists(id)) {
+						// It's an alias - use the existing character's GUID
+						var existingChar = characters.get(id);
+						characters.set(name, { name: name, id: id, guid: existingChar.guid });
+					} else {
+						// It's a new character definition with ID
+						characters.set(name, { name: name, id: id, guid: Script2Plot.generateGUID() });
+						// Also store by ID for alias resolution
+						characters.set(id, characters.get(name));
+					}
 				}
 			} else if (trimmed.startsWith("@title ")) {
 				plotTitle = trimmed.substring(7).trim();
 			}
 		}
 		
-		// Process commands
-		script = commandProcessor.executeCommands(script);
-		
 		// Second pass: parse instructions
-		var instructions:Array<PlotagonPlotInstruction> = [];
-		var i = 0;
-		var lineNum = 0;
-		
 		while (i < lines.length) {
 			var line = lines[i];
 			lineNum = i + 1;
 			var trimmed = line.trim();
 			
-			if (trimmed.length == 0 || trimmed.startsWith("#")) {
+			// Skip empty lines
+			if (trimmed.length == 0) {
 				i++;
 				continue;
 			}
 			
-			var cleanLine = trimmed.split("#")[0].trim();
+			// Skip @ commands (already processed)
+			if (trimmed.startsWith("@")) {
+				i++;
+				continue;
+			}
+			
+			// Check for comments - but be careful about dialogue lines
+			// Dialogue lines have the pattern Character(expression)
+			var dialoguePattern = ~/^\w+\([^)]+\)$/;
+			if (trimmed.startsWith("#") && !dialoguePattern.match(trimmed)) {
+				// Only skip if it's a standalone comment AND not a dialogue header
+				i++;
+				continue;
+			}
 			
 			try {
-				if (cleanLine.startsWith("Scene ")) {
-					instructions.push(parseSceneInstruction(cleanLine.substring(6)));
-				} else if (cleanLine.startsWith("Action ")) {
-					instructions.push(parseActionInstruction(cleanLine.substring(7)));
-				} else if (cleanLine.startsWith("Effect ")) {
-					instructions.push(parseEffectInstruction(cleanLine.substring(7)));
-				} else if (cleanLine.startsWith("Textplate ")) {
-					instructions.push(parseTextplateInstruction(cleanLine.substring(10)));
-				} else if (cleanLine.startsWith("Sound ")) {
-					instructions.push(parseSoundInstruction(cleanLine.substring(6)));
-				} else if (cleanLine.startsWith("Music ")) {
-					instructions.push(parseMusicInstruction(cleanLine.substring(6)));
+				// Try to parse as dialogue first (most common)
+				var dialogue = parseDialogueInstruction(lines, i);
+				if (dialogue != null) {
+					instructions.push(dialogue);
+					// Skip lines that were consumed by dialogue parsing
+					var consumedLines = countDialogueLines(lines, i);
+					i += consumedLines;
+					continue;
+				}
+				
+				// If not dialogue, try other instruction types
+				var cleanLine = line;
+				// Remove end-of-line comments (but preserve # in middle like #BREATH02#)
+				var commentIndex = line.indexOf("#");
+				if (commentIndex != -1 && line.trim().startsWith("#")) {
+					cleanLine = line.substring(0, commentIndex).trim();
 				} else {
-					// Try to parse as dialogue
-					var dialogue = parseDialogueInstruction(lines, i);
-					if (dialogue != null) {
-						instructions.push(dialogue);
-						// Skip lines that were consumed by dialogue parsing
-						var consumedLines = countDialogueLines(lines, i);
-						i += consumedLines;
-						continue;
-					} else {
-						parserErrors.push({ line: lineNum, message: "Unrecognized instruction: " + cleanLine });
-					}
+					cleanLine = line.trim();
+				}
+
+				var tocheck = cleanLine.toLowerCase();
+				
+				if (tocheck.startsWith("scene ")) {
+					instructions.push(parseSceneInstruction(cleanLine.substring(6)));
+				} else if (tocheck.startsWith("action ")) {
+					instructions.push(parseActionInstruction(cleanLine.substring(7)));
+				} else if (tocheck.startsWith("effect ")) {
+					instructions.push(parseEffectInstruction(cleanLine.substring(7)));
+				} else if (tocheck.startsWith("textplate ")) {
+					instructions.push(parseTextplateInstruction(cleanLine.substring(10)));
+				} else if (tocheck.startsWith("sound ")) {
+					instructions.push(parseSoundInstruction(cleanLine.substring(6)));
+				} else if (tocheck.startsWith("music ")) {
+					instructions.push(parseMusicInstruction(cleanLine.substring(6)));
+				} else if (tocheck.startsWith("/settime")) {
+					// Handle standalone /settime lines
+					var textInstruction:PlotagonPlotInstruction = {
+						type: "textPlate",
+						parameters: {
+							GUID: Script2Plot.generateGUID(),
+							extensiondata: true,
+							isRecorded: false,
+							playRecording: false,
+							extrasEnabled: false,
+							alignment: "center",
+							text: cleanLine
+						}
+					};
+					instructions.push(textInstruction);
+				} else {
+					// This line doesn't match any pattern
+					// It might be malformed dialogue or unexpected content
+					parserErrors.push({ line: lineNum, message: "Unrecognized instruction: " + trimmed });
 				}
 			} catch (e:Dynamic) {
 				parserErrors.push({ line: lineNum, message: "Error parsing line: " + e });
@@ -156,7 +201,7 @@ class ScriptParser {
 		var titleInstruction:PlotagonPlotInstruction = {
 			type: "textPlate",
 			parameters: {
-				GUID: generateGUID(),
+				GUID: Script2Plot.generateGUID(),
 				extensiondata: true,
 				isRecorded: false,
 				playRecording: false,
@@ -167,9 +212,10 @@ class ScriptParser {
 		};
 		instructions.unshift(titleInstruction);
 		
-		var plotId = generateGUID();
-		var now = Date.now().toString();
-		var plotTime = StringTools.replace(now, " ", "T");
+		var plotId = Script2Plot.generateGUID();
+
+		// Converting `Date` to ISO 8601 standard format.
+		var plotTime = getISO8601DateTimeNoMs();
 		
 		return {
 			id: plotId,
@@ -184,6 +230,23 @@ class ScriptParser {
 				instructions: instructions
 			}
 		};
+	}
+
+	function getISO8601DateTimeNoMs():String {
+		var d = Date.now();
+		var pad = function(v:Int, ?c:Int):String {
+			return StringTools.lpad(Std.string(v), "0", c);
+		};
+		
+		var year = pad(d.getFullYear(), 4);
+		var month = pad(d.getMonth() + 1, 2);
+		var day = pad(d.getDate(), 2);
+		var hours = pad(d.getHours(), 2);
+		var minutes = pad(d.getMinutes(), 2);
+		var seconds = pad(d.getSeconds(), 2);
+		
+		// ISO 8601 without milliseconds
+		return '${year}-${month}-${day}T${hours}:${minutes}:${seconds}';
 	}
 	
 	function parseNamedParams(paramStr:String):Map<String, String> {
@@ -202,9 +265,22 @@ class ScriptParser {
 	
 	function resolveCharacter(name:String):Character {
 		if (characters.exists(name)) {
+			var character = characters.get(name);
+			var id = character.id;
+
+			// Finds the parent character if it exists by the alias
+			// NOTE: I had written this completely by myself without copying any code from deepseek that it gave me.
+			if (characters.exists(id)) {
+				var parentCharacter = characters.get(id);
+				return { name: name, id: parentCharacter.id, guid: parentCharacter.guid };
+			}
+
 			return characters.get(name);
 		}
-		return { name: name, id: name, guid: generateGUID() };
+		
+		// If not found, create a new character with this name as both name and ID
+		// The GUID will be generated
+		return { name: name, id: name, guid: Script2Plot.generateGUID() };
 	}
 	
 	function parseSceneInstruction(paramStr:String):PlotagonPlotInstruction {
@@ -212,7 +288,7 @@ class ScriptParser {
 		var instruction:PlotagonPlotInstruction = {
 			type: "scene",
 			parameters: {
-				GUID: generateGUID(),
+				GUID: Script2Plot.generateGUID(),
 				extensiondata: true,
 				isRecorded: false,
 				playRecording: false,
@@ -244,7 +320,7 @@ class ScriptParser {
 			var cameraId = Std.parseInt(params.get("camera"));
 			if (cameraId != null) {
 				instruction.parameters.camera = {
-					type: { id: cameraId, text: cameraTypeNames.get(cameraId) }
+					type: { id: cameraId, text: Script2Plot.cameraTypeNames.get(cameraId) }
 				};
 			}
 		}
@@ -263,7 +339,7 @@ class ScriptParser {
 		var instruction:PlotagonPlotInstruction = {
 			type: "action",
 			parameters: {
-				GUID: generateGUID(),
+				GUID: Script2Plot.generateGUID(),
 				extensiondata: true,
 				isRecorded: false,
 				playRecording: false,
@@ -289,7 +365,7 @@ class ScriptParser {
 			var cameraId = Std.parseInt(params.exists("camera") ? params.get("camera") : params.get("cam"));
 			if (cameraId != null) {
 				instruction.parameters.camera = {
-					type: { id: cameraId, text: cameraTypeNames.get(cameraId) }
+					type: { id: cameraId, text: Script2Plot.cameraTypeNames.get(cameraId) }
 				};
 			}
 		}
@@ -298,7 +374,27 @@ class ScriptParser {
 	}
 	
 	function parseEffectInstruction(paramStr:String):PlotagonPlotInstruction {
-		var effects = paramStr.trim().split(~/\s+(?=\/)/);
+		// Split by space followed by /
+		var effects = new Array<String>();
+		var tempStr = paramStr.trim();
+		var start = 0;
+		
+		while (start < tempStr.length) {
+			var slashPos = tempStr.indexOf("/", start);
+			if (slashPos == -1) break;
+			
+			// Find the end of this effect (next slash or end of string)
+			var nextSlash = tempStr.indexOf("/", slashPos + 1);
+			var end = (nextSlash == -1) ? tempStr.length : nextSlash;
+			
+			var effect = tempStr.substring(slashPos, end).trim();
+			if (effect.length > 0) {
+				effects.push(effect);
+			}
+			
+			start = end;
+		}
+		
 		var effectObjects:Array<PlotagonEffectObject> = [];
 		
 		for (effect in effects) {
@@ -307,22 +403,24 @@ class ScriptParser {
 			var effectValue = parts.length > 1 ? parts[1].trim() : "1.0";
 			
 			effectObjects.push({
-				EffectName: effectNames.get(effectName),
+				EffectName: Script2Plot.effectNames.get(effectName),
 				EffectValue: effectValue
 			});
 		}
+
+		var effectText = effects.join(" ").replace(":", " ");
 		
 		return {
 			type: "effect",
 			parameters: {
-				GUID: generateGUID(),
+				GUID: Script2Plot.generateGUID(),
 				extensiondata: true,
 				isRecorded: false,
 				playRecording: false,
 				extrasEnabled: false,
 				effectsName: effectObjects,
 				character: { id: "", text: "EFFECT" },
-				text: { id: "", text: effects.length > 0 ? effects[0] : "" }
+				text: { id: "", text: effectText }
 			}
 		};
 	}
@@ -340,7 +438,7 @@ class ScriptParser {
 		var instruction:PlotagonPlotInstruction = {
 			type: "textPlate",
 			parameters: {
-				GUID: generateGUID(),
+				GUID: Script2Plot.generateGUID(),
 				extensiondata: true,
 				isRecorded: false,
 				playRecording: false,
@@ -349,17 +447,22 @@ class ScriptParser {
 			}
 		};
 		
-		if (params.exists("align")) {
-			instruction.parameters.alignment = params.get("align");
-		}
+		instruction.parameters.alignment = params.exists("align") ? params.get("align") : "center";
+		
 		if (params.exists("char") || params.exists("character")) {
-			var charName = params.exists("char") ? params.get("char") : params.get("character");
-			var char = resolveCharacter(charName);
-			instruction.parameters.character = { id: char.id, text: char.name };
+			if (params.exists("char") || params.exists("character")) {
+				var charName = params.exists("char") ? params.get("char") : params.get("character");
+				var char = resolveCharacter(charName);
+				instruction.parameters.character = { id: char.id, text: char.name };
+			} else {
+				instruction.parameters.character = { id: "", text: "None" };
+			}
 		}
 		if (params.exists("vol") || params.exists("volume")) {
 			var vol = params.exists("vol") ? params.get("vol") : params.get("volume");
 			instruction.parameters.volume = Std.parseFloat(vol);
+		} else {
+			instruction.parameters.volume = 1.0;
 		}
 		
 		return instruction;
@@ -371,7 +474,7 @@ class ScriptParser {
 		var instruction:PlotagonPlotInstruction = {
 			type: "sound",
 			parameters: {
-				GUID: generateGUID(),
+				GUID: Script2Plot.generateGUID(),
 				extensiondata: true,
 				isRecorded: false,
 				playRecording: false,
@@ -397,7 +500,7 @@ class ScriptParser {
 		var instruction:PlotagonPlotInstruction = {
 			type: "music",
 			parameters: {
-				GUID: generateGUID(),
+				GUID: Script2Plot.generateGUID(),
 				extensiondata: true,
 				isRecorded: false,
 				playRecording: false,
@@ -405,8 +508,8 @@ class ScriptParser {
 			}
 		};
 		
-		if (params.exists("track")) {
-			var track = params.get("track");
+		if (params.exists("music")) {
+			var track = params.get("music");
 			instruction.parameters.music = { id: track, text: track };
 		}
 		if (params.exists("vol") || params.exists("volume")) {
@@ -420,63 +523,100 @@ class ScriptParser {
 	function parseDialogueInstruction(lines:Array<String>, startIndex:Int):PlotagonPlotInstruction {
 		if (startIndex >= lines.length) return null;
 		
-		var line = lines[startIndex].trim();
+		var line = lines[startIndex];
+		var trimmed = line.trim();
+		
+		// Match character(expression) pattern
 		var dialogueMatch = ~/^(\w+)\(([^)]+)\)$/;
 		
-		if (!dialogueMatch.match(line)) return null;
+		if (!dialogueMatch.match(trimmed)) {
+			return null;
+		}
 		
 		var charName = dialogueMatch.matched(1);
 		var expression = dialogueMatch.matched(2);
 		
-		// Look for parameter line
+		// CHARACTER AUTOCOMPLETION: Find the best matching character name
+		if (!characters.exists(charName)) {
+			var bestMatch = findBestCharacterMatch(charName);
+			if (bestMatch != null) {
+				Sys.println('Warning: Character "$charName" not found. Did you mean "$bestMatch"? Using "$bestMatch" instead.');
+				charName = bestMatch;
+			}
+		}
+		
+		// Now find the text line
+		var lineIndex = startIndex + 1;
 		var paramLine = "";
 		var textLine = "";
-		var lineIndex = startIndex + 1;
 		
+		// Skip empty lines but NOT comments when looking for parameters/text
+		// We need to be more careful about what we skip
 		while (lineIndex < lines.length) {
-			var currentLine = lines[lineIndex].trim();
-			if (currentLine.length == 0 || currentLine.startsWith("#")) {
+			var currentLine = lines[lineIndex];
+			var currentTrimmed = currentLine.trim();
+			
+			// Skip only truly empty lines (whitespace only)
+			if (currentTrimmed.length == 0) {
 				lineIndex++;
 				continue;
 			}
 			
-			// Check if this line contains parameters (has =)
-			if (currentLine.indexOf("=") != -1) {
-				paramLine = currentLine;
-				lineIndex++;
-				
-				// Find text line after parameters
-				while (lineIndex < lines.length) {
-					currentLine = lines[lineIndex].trim();
-					if (currentLine.length == 0 || currentLine.startsWith("#")) {
-						lineIndex++;
-						continue;
+			// Check if this could be a parameter line (contains = and doesn't start with /)
+			// BUT we should also check if it's actually part of dialogue text that happens to contain =
+			if (currentTrimmed.indexOf("=") != -1 && !currentTrimmed.startsWith("/") && 
+				!currentTrimmed.startsWith("#")) {
+				// This looks like a parameter line - but we need to be sure it's not dialogue text
+				// A simple check: if it has multiple = signs or contains common parameter names
+				var looksLikeParams = ~/(^|\s)(vol|cam|volume|camera)=/;
+				if (looksLikeParams.match(currentTrimmed)) {
+					paramLine = currentTrimmed;
+					lineIndex++;
+					
+					// Now find the text line
+					while (lineIndex < lines.length) {
+						currentLine = lines[lineIndex];
+						currentTrimmed = currentLine.trim();
+						
+						if (currentTrimmed.length == 0) {
+							lineIndex++;
+							continue;
+						}
+						
+						// Found text line - could start with # or anything
+						textLine = currentLine; // Keep the original line with formatting
+						break;
 					}
-					textLine = currentLine;
 					break;
 				}
-			} else {
-				textLine = currentLine;
 			}
+			
+			// If we get here, this is the text line (could start with #)
+			textLine = currentLine; // Keep the original line with formatting
 			break;
 		}
 		
-		if (textLine == "") return null;
+		if (textLine == "") {
+			// No text found - this might be invalid dialogue
+			return null;
+		}
 		
 		var params = parseNamedParams(paramLine);
 		var char = resolveCharacter(charName);
+
+		var fixedText = textLine.trim().replace('"', '\\"');
 		
 		var instruction:PlotagonPlotInstruction = {
 			type: "dialogue",
 			parameters: {
-				GUID: generateGUID(),
+				GUID: Script2Plot.generateGUID(),
 				extensiondata: true,
 				isRecorded: false,
 				playRecording: false,
 				extrasEnabled: false,
 				character: { id: char.id, text: char.name },
 				expression: { id: expression, text: expression },
-				text: { id: "", text: textLine }
+				text: { id: "", text: fixedText }
 			}
 		};
 		
@@ -488,48 +628,178 @@ class ScriptParser {
 			var camId = Std.parseInt(params.exists("cam") ? params.get("cam") : params.get("camera"));
 			if (camId != null) {
 				instruction.parameters.camera = {
-					type: { id: camId, text: cameraTypeNames.get(camId) }
+					type: { id: camId, text: Script2Plot.cameraTypeNames.get(camId) }
 				};
 			}
 		}
 		
 		return instruction;
 	}
-	
-	function countDialogueLines(lines:Array<String>, startIndex:Int):Int {
-		var count = 1; // Starting line itself
+
+	// Damerau-Levenshtein distance algorithm for character name autocorrection
+	function damerauLevenshteinDistance(a:String, b:String):Int {
+		var lenA = a.length;
+		var lenB = b.length;
+		var INF = lenA + lenB;
 		
-		// Skip to find parameter or text line
-		var lineIndex = startIndex + 1;
-		var foundText = false;
+		// Create distance matrix
+		var score = new Array<Array<Int>>();
+		for (i in 0...(lenA + 2)) {
+			score[i] = new Array<Int>();
+			for (j in 0...(lenB + 2)) {
+				score[i][j] = 0;
+			}
+		}
 		
-		while (lineIndex < lines.length && !foundText) {
-			var line = lines[lineIndex].trim();
-			count++;
+		score[0][0] = INF;
+		for (i in 0...lenA + 1) {
+			score[i + 1][1] = i;
+			score[i + 1][0] = INF;
+		}
+		for (j in 0...lenB + 1) {
+			score[1][j + 1] = j;
+			score[0][j + 1] = INF;
+		}
+		
+		// Create character dictionary for transposition handling
+		var da = new Map<String, Int>();
+		for (i in 0...lenA) {
+			da.set(a.charAt(i), 0);
+		}
+		for (j in 0...lenB) {
+			da.set(b.charAt(j), 0);
+		}
+		
+		// Calculate distance
+		for (i in 1...lenA + 1) {
+			var db = 0;
+			for (j in 1...lenB + 1) {
+				var i1 = da.get(b.charAt(j - 1));
+				var j1 = db;
+				var cost = (a.charAt(i - 1) == b.charAt(j - 1)) ? 0 : 1;
+				
+				if (cost == 0) {
+					db = j;
+				}
+				
+				// Find minimum of four operations
+				var substitution = score[i][j] + cost;
+				var insertion = score[i + 1][j] + 1;
+				var deletion = score[i][j + 1] + 1;
+				var transposition = INF;
+				
+				if (i1 > 0 && j1 > 0) {
+					transposition = score[i1][j1] + (i - i1 - 1) + 1 + (j - j1 - 1);
+				}
+				
+				score[i + 1][j + 1] = Math.floor(Math.min(
+					Math.min(substitution, insertion),
+					Math.min(deletion, transposition)
+				));
+			}
+			da.set(a.charAt(i - 1), i);
+		}
+		
+		return score[lenA + 1][lenB + 1];
+	}
+
+	// Find the best character match using multiple strategies
+	function findBestCharacterMatch(inputName:String):String {
+		// Count characters using iterator instead of .count()
+		var charCount = 0;
+		for (_ in characters.keys()) {
+			charCount++;
+		}
+		
+		if (charCount == 0) return null;
+		
+		var bestMatch:String = null;
+		var bestScore:Float = Math.POSITIVE_INFINITY;
+		var inputLower = inputName.toLowerCase();
+		
+		// Strategy 1: Exact case-insensitive match
+		for (charName in characters.keys()) {
+			if (charName.toLowerCase() == inputLower) {
+				return charName;
+			}
+		}
+		
+		// Strategy 2: Damerau-Levenshtein distance with length normalization
+		for (charName in characters.keys()) {
+			var distance = damerauLevenshteinDistance(inputName.toLowerCase(), charName.toLowerCase());
+			var maxLen = Math.max(inputName.length, charName.length);
+			var normalizedScore = distance / maxLen;
 			
-			if (line.length == 0 || line.startsWith("#")) {
+			// Penalize matches that are too different in length
+			var lengthDiff = Math.abs(inputName.length - charName.length);
+			var lengthPenalty = lengthDiff / maxLen;
+			var finalScore = normalizedScore * 0.7 + lengthPenalty * 0.3;
+			
+			if (finalScore < bestScore) {
+				bestScore = finalScore;
+				bestMatch = charName;
+			}
+		}
+		
+		// Only return a match if it's reasonably close
+		// Threshold based on string length
+		var threshold = if (inputName.length >= 1 && inputName.length <= 3) {
+			0.4;  // Shorter names need stricter matching
+		} else if (inputName.length >= 4 && inputName.length <= 6) {
+			0.3;
+		} else {
+			0.25; // Longer names allow more flexibility
+		}
+		
+		return (bestScore <= threshold) ? bestMatch : null;
+	}
+
+	function countDialogueLines(lines:Array<String>, startIndex:Int):Int {
+		var count = 1; // The character(expression) line
+		
+		var lineIndex = startIndex + 1;
+		
+		// Skip to find text line
+		while (lineIndex < lines.length) {
+			var line = lines[lineIndex];
+			var trimmed = line.trim();
+			
+			// Skip only truly empty lines
+			if (trimmed.length == 0) {
 				lineIndex++;
+				count++;
 				continue;
 			}
 			
-			// If this line has =, it's parameters, need one more line for text
-			if (line.indexOf("=") != -1) {
-				lineIndex++;
-				// Skip empty lines/comments to find text
-				while (lineIndex < lines.length) {
-					line = lines[lineIndex].trim();
+			// Check if this could be a parameter line
+			if (trimmed.indexOf("=") != -1 && !trimmed.startsWith("/") && !trimmed.startsWith("#")) {
+				// Additional check for parameter-like content
+				var looksLikeParams = ~/(^|\s)(vol|cam|volume|camera)=/;
+				if (looksLikeParams.match(trimmed)) {
+					lineIndex++;
 					count++;
-					if (line.length == 0 || line.startsWith("#")) {
-						lineIndex++;
-						continue;
+					
+					// Skip to find text line after parameters
+					while (lineIndex < lines.length) {
+						line = lines[lineIndex];
+						trimmed = line.trim();
+						
+						if (trimmed.length == 0) {
+							lineIndex++;
+							count++;
+							continue;
+						}
+						
+						// Found text line - could be anything including # at the start
+						count++;
+						return count;
 					}
-					foundText = true;
-					break;
 				}
-			} else {
-				foundText = true;
 			}
-			break;
+			
+			// Found text line directly
+			count++;
+			return count;
 		}
 		
 		return count;
@@ -613,8 +883,9 @@ class PlotDocConverter {
 						hasParams = true;
 					}
 					if (hasParams) script.add("\n");
-					var text = (params.text is String) ? params.text : params.text.text;
-					script.add('$text\n\n');
+					var text:Dynamic = params.text;
+					var textStr = Std.isOfType(text, String) ? text : text.text;
+					script.add('$textStr\n\n');
 					
 				case "action":
 					script.add("Action");
@@ -628,7 +899,7 @@ class PlotDocConverter {
 					script.add("Effect");
 					if (params.effectsName != null) {
 						for (effect in params.effectsName) {
-							var effectCmd = reverseEffectNames.get(effect.EffectName);
+							var effectCmd = Script2Plot.reverseEffectNames.get(effect.EffectName);
 							if (effectCmd != null) {
 								script.add(' $effectCmd');
 								if (effect.EffectValue != "1.0") {
@@ -640,7 +911,8 @@ class PlotDocConverter {
 					script.add("\n\n");
 					
 				case "textPlate":
-					if (Std.string(params.text).indexOf("/settime 0.00001 THIS PLOT WAS MADE") == -1) {
+					var textStr = Std.string(params.text);
+					if (textStr.indexOf("/settime 0.00001 THIS PLOT WAS MADE") == -1) {
 						script.add("Textplate");
 						if (params.character != null) script.add(' char=${params.character.text}');
 						if (params.alignment != null) script.add(' align=${params.alignment}');
@@ -656,7 +928,7 @@ class PlotDocConverter {
 					
 				case "music":
 					script.add("Music");
-					if (params.music != null) script.add(' track=${params.music.id}');
+					if (params.music != null) script.add(' music=${params.music.id}');
 					if (params.volume != null) script.add(' vol=${params.volume}');
 					script.add("\n\n");
 			}
@@ -666,6 +938,7 @@ class PlotDocConverter {
 	}
 }
 
+@:publicFields
 class Script2Plot {
     static var cameraTypeNames:Map<Int, String> = [
         1 => "establishing shot",
@@ -753,7 +1026,7 @@ class Script2Plot {
         var args = Sys.args();
         
         if (args.length < 2) {
-            Sys.println("Usage: Plot2Script <command> <input_file> [output_file]");
+            Sys.println("Usage: Plot2Script <command> <input_file> [output_file *without extension]");
             Sys.println("Commands:");
             Sys.println("  parse     - Parse script file to Plotagon JSON");
             Sys.println("  convert   - Convert Plotagon JSON back to script");
@@ -782,13 +1055,13 @@ class Script2Plot {
                     
                     var json = myOwnStringifyCuzPlotagonForcesJsonOrdering(plotDoc);
                     
-                    if (outputFile != null) {
-                        File.saveContent(outputFile, json);
-                        Sys.println("Successfully parsed script to: " + outputFile);
-                    } else {
-                        Sys.println(json);
-                    }
-                    
+                    if (outputFile == null)
+						outputFile = '${plotDoc.id}.plotdoc';
+					else
+						plotDoc.id = outputFile;
+
+					File.saveContent('$outputFile.plotdoc', json);
+					Sys.println("Successfully parsed script to: " + outputFile);
                 } catch (e:Dynamic) {
                     Sys.println("Error: " + e);
                 }
@@ -851,7 +1124,7 @@ class Script2Plot {
         
         Sys.println("Sound/Music:");
         Sys.println("  Sound sound=id vol=0.6");
-        Sys.println("  Music track=id vol=0.4");
+        Sys.println("  Music music=id vol=0.4");
         Sys.println("");
         
         Sys.println("Comments start with #");
@@ -892,7 +1165,14 @@ class Script2Plot {
             if (parameters.music != null) result += ',\n          \"music\": ${stringifyPlotagonObject(parameters.music)}';
             if (parameters.sound != null) result += ',\n          \"sound\": ${stringifyPlotagonObject(parameters.sound)}';
             if (parameters.expression != null) result += ',\n          \"expression\": ${stringifyPlotagonObject(parameters.expression)}';
-            if (parameters.text != null) result += ',\n          \"text\": ${(Std.is(parameters.text, String) ? '\"${parameters.text}\"' : stringifyPlotagonObject(parameters.text))}';
+            if (parameters.text != null) {
+                var text = parameters.text;
+                if (Std.isOfType(text, String)) {
+                    result += ',\n          \"text\": \"${text}\"';
+                } else {
+                    result += ',\n          \"text\": ${stringifyPlotagonObject(text)}';
+                }
+            }
             if (parameters.effectsName != null) result += ',\n          \"effectsName\": ${stringifyPlotagonEffectObjects(parameters.effectsName)}';
             if (parameters.character != null) result += ',\n          \"character\": ${stringifyPlotagonObject(parameters.character)}';
             if (parameters.target != null) result += ',\n          \"target\": ${stringifyPlotagonObject(parameters.target)}';
@@ -935,7 +1215,8 @@ class Script2Plot {
         var result = '{';
         result += '\n              \"id\": \"${obj.id}\",';
         result += '\n              \"name\": \"${obj.name}\"';
-        if (obj.useLocations != null) result += ',\n              \"useLocations\": ${obj.useLocations}\n            }';
+        if (obj.useLocations != null) result += ',\n              \"useLocations\": ${obj.useLocations}';
+        result += '\n            }';
         return result;
     }
     

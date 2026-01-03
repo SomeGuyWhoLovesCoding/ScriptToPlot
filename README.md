@@ -1,100 +1,193 @@
-# ScriptToPlot
-This tool helps pump our your own hour-long raw plots faster! This was made because Plotagon Studio eventually lags when there are so many instructions (dialogue prompts/scene prompts/whatever) being rendered to the app.
+# Plot2Script & ScriptToPlot
 
-*Please ignore the Main filename*
+#### Not ScriptToPlot 2, now ScriptToPlot Version 2, it's Script2Plot.
 
-## How to compile
+A powerful tool for creating Plotagon animations using a simple script format. Convert text scripts into Plotagon `.plotdoc` files and vice versa.
 
-Install haxe (whenever it's the latest version or not) and do `haxelib install hxcpp`.
+## What's New
 
-Then, you should be able to just:
+This version introduces a completely redesigned script format with named parameters and improved character management:
 
-```
-haxe --main MapGenerator --cpp bin
-```
+- **New script syntax** with `@commands`, named parameters (`key=value`), and flexible formatting
+- **Character autocompletion** - smart suggestions for character names with fuzzy matching
+- **Alias support** - create character aliases: `@char Sidekick = Hero`
+- **Bidirectional conversion** - convert scripts to Plotagon files AND Plotagon files back to scripts
+- **Better error handling** with detailed parser error messages
+- **Simplified usage** with command-line interface
 
-Every time you make changes to it.
+## Installation
 
-## How to use
-
-Dialogue prompts:
-
-```
-[Character from Map]]- [Character's Expression]]- [Dialogue]]- [Dialogue Volume]]- [Dialogue Camera Property]
-```
-
-Action prompts:
-
-```
-Action]- [typeofactioninlowercasefromplotagonfiles]]- [Actor 1 from Map]]- [Actor 2 from Map]
+1. Install [Haxe](https://haxe.org/download/)
+2. Install required libraries:
+```bash
+haxelib install hxcpp
 ```
 
-Textplate prompts:
+## Compilation
 
-```
-Textplate]- [Actor from Map]]- [Textplate Alignment]]- [Dialogue]]- [Dialogue Volume]
-```
-
-Sound prompts:
-
-```
-Sound]- [soundinlowercasefromplotagonfiles]]- [Sound Volume]
+```bash
+haxe --main Script2Plot --cpp bin
 ```
 
-Music prompts:
+## Quick Start
 
-```
-Music]- [musicinlowercasefromplotagonfiles]]- [Music Volume]
-```
+### 1. Create a script file (`myscript.txt`)
 
-Scene prompts:
+```txt
+@title My Awesome Plot
+@char Hero = protagonist
+@char Villain = antagonist
+@char Sidekick = Hero  # Alias to Hero
 
-```
-Scene]- [sceneidinlowercasefromplotagonfiles]]- [Location 1]]- [Location 2]]- [Actor 1 from Map]]- [Actor 2 from map]]- [Scene Ambience Volume]]- [Scene Camera Property]
-```
+Scene scene=park loc1=bench actor1=Hero actor2=Villain camera=2
 
-Create a blank txt file and write your script there.
+Hero(smiling)
+vol=0.8 cam=2
+Hello there!
 
-## How's the script formatted?
+Villain(angry)
+I've been expecting you, Hero!
 
-Your script should look like this:
-
-Scene]- spaces.greenroom]- middle1]- middle2]- android.androidmale]- android.androidfemale]- 1
-android.androidmale]- waving]- Hi! I'm android male.
-android.androidfemale]- waving]- And I'm female android!
-
-## What's all this "Map" about!?
-
-Here's an example of a character Map.
-
-## What's "Character1" at the third argument?
-
-You can export lines to txt files for a specific character's voice (with variants) to automate the process of generating recordings of Acapela tts voicelines using TextAloud's batch file converter and adding them into your plotagon project.
-
-## And how do I use it?
-
-Simple. Create a "Map.txt" and write this:
-
-```
-[CharacterName] = [CharacterGUID]
+Action type=push char=Villain target=Hero
 ```
 
-(A Map should contin your personal plotagon character dictionary of the character names and their guid's)
+### 2. Convert to Plotagon file
 
-If you want to import all your own characters to the file, read over every one of the pcd files at the root of C:\ProgramData\PLOTAGON_PROGRAMDATA_[GUID]\Bundles
+```bash
+./bin/Script2Script parse myscript.txt
+```
+This creates `[GUID].plotdoc` that you can import into Plotagon ().
 
-```bat
-ScriptToPlot Map.txt "Demo Script.txt" "Character1, Character2, Character3"
+Do note that the output file (third argument) is completely optional and 
+
+### 3. Convert Plotagon file back to script
+
+```bash
+./bin/Script2Script convert myplot.plotdoc recovered.s2ps
 ```
 
-Replace the string with your txt file.
+## Script Syntax Reference
 
-Then import the .plotdoc file onto C:\ProgramData\PLOTAGON_PROGRAMDATA_be8b8328-7944-4d8b-af02-de4033b549ba\Plots and load the plotagon app! You should see your imported plot right at the start.
+### Character Definitions
+```txt
+@char Name = character_id      # Define character with Plotagon ID
+@char Alias = ExistingChar     # Create alias to existing character
+@title Plot Title             # Set plot title
+```
 
-## Want some tips?
+### Scene Instruction
+```txt
+Scene scene=id loc1=l1 loc2=l2 actor1=A1 actor2=A2 camera=1 volume=0.8 extras=true
+```
 
-1. Make sure you don't make any blank lines. Just lines full of instruction scripts that translate directly into a .plotdoc instruction structure.
+### Dialogue
+```txt
+Character(expression)         # Character name with expression
+vol=0.8 cam=2                 # Optional parameters line
+Dialogue text here            # Dialogue text (can start with #)
+```
 
-2. Don't mix up the volume and camera property. You'll end up with the volume being the camera's id (whenever it's wide shot, or whatever)
+### Actions
+```txt
+Action type=hug char=C1 target=C2 cam=2
+```
 
-3. Proofread before converting. You might end up writing an instruction incorrectly without noticing.
+### Effects
+```txt
+Effect /fadeinb /fadeoutb /fadeinw /fadeoutw
+Effect /fadeinp /fadeoutp /vignette /retro
+Effect /old /bloom:0.5 /setfov:1.2 /normal
+```
+
+### Textplates
+```txt
+Textplate char=C1 align=center vol=0.7: Text content here
+```
+
+### Sound & Music
+```txt
+Sound sound=id vol=0.6
+Music music=id vol=0.4
+```
+
+## Command Line Usage
+
+```bash
+# Parse script to Plotagon JSON
+Plot2Script parse <script_file> [output_name]
+
+# Convert Plotagon JSON back to script
+Plot2Script convert <plotdoc_file> [output_script]
+
+# Show syntax reference
+Plot2Script syntax
+```
+
+## Advanced Features
+
+### Character Autocompletion
+The parser automatically suggests corrections for misspelled character names using fuzzy matching.
+
+### Parameter Flexibility
+- All parameters are optional and can be in any order
+- Most parameters have shorthand forms: `vol`, `cam`, `char`, `tgt`
+- Comments start with `#` and can appear anywhere
+
+### Supported Camera Types
+```
+1 = establishing shot
+2 = in dialogue mode
+3 = in interaction mode
+4 = moving right
+5 = moving left
+6 = moving forward
+7 = moving backward
+8 = wide shot
+9 = still
+10 = skipping establishing shot
+```
+
+### Available Effects
+- `/fadeinb`, `/fadeoutb` - Black fade in/out
+- `/fadeinw`, `/fadeoutw` - White fade in/out
+- `/fadeinp`, `/fadeoutp` - Custom fade in/out
+- `/vignette` - Vignette effect
+- `/retro` - Sepia filter
+- `/old` - Black and white
+- `/bloom` - Bloom effect (with intensity: `/bloom:0.5`)
+- `/setfov` - Field of view adjustment (with value: `/setfov:1.2`)
+- `/normal` - Reset to normal
+
+## Importing to Plotagon
+
+1. Generate your `.plotdoc` file using `Plot2Script parse`
+2. Copy the file to:
+   `C:\ProgramData\PLOTAGON_PROGRAMDATA_[GUID]\Plots\`
+3. Open Plotagon Studio - your plot should appear in the list
+
+## Tips & Best Practices
+
+1. **Define characters first** using `@char` commands at the top of your script
+2. **Use aliases** for characters that appear multiple times or have different names in dialogue
+3. **Keep parameter lines simple** - one `key=value` pair per parameter
+4. **Test with short scripts** before creating hour-long plots
+5. **Use the `syntax` command** when unsure about formatting
+6. **Check parser errors** - they provide line numbers and specific issues
+
+## Troubleshooting
+
+**"Character not found" warnings**: Use `@char` definitions or check for typos. The autocompletion will suggest similar names.
+
+**Parse errors**: Run `Plot2Script syntax` to see the correct format for each instruction type.
+
+**Import issues in Plotagon**: Ensure you're using the correct Plotagon data folder GUID for your installation.
+
+## Legacy Format Support
+
+The old format with `[Character]]- [Expression]]- [Dialogue]` syntax is no longer supported, as it was ScriptToPlot format and was a pretty bad format.
+
+Use the new named parameter format instead. It's definitely much nicer and more flexible.
+
+---
+
+*Note: This tool is for use with Plotagon Studio. Plotagon is a trademark of Plotagon AB.*
