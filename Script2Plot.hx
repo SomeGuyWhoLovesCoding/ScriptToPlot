@@ -81,34 +81,9 @@ class ScriptParser {
 		var i = 0;
 		var lineNum = 0;
 		
-		// First pass: extract characters from @char commands
-		for (line in lines) {
-			var trimmed = line.trim();
-			if (trimmed.startsWith("@char ")) {
-				var defStr = trimmed.substring(6).trim();
-				var parts = defStr.split("=").map(p -> p.trim());
-				if (parts.length >= 2) {
-					var name = parts[0];
-					var id = parts[1];
-					
-					// Check if this is an alias to an existing character
-					if (characters.exists(id)) {
-						// It's an alias - use the existing character's GUID
-						var existingChar = characters.get(id);
-						characters.set(name, { name: name, id: id, guid: existingChar.guid });
-					} else {
-						// It's a new character definition with ID
-						characters.set(name, { name: name, id: id, guid: Script2Plot.generateGUID() });
-						// Also store by ID for alias resolution
-						characters.set(id, characters.get(name));
-					}
-				}
-			} else if (trimmed.startsWith("@title ")) {
-				plotTitle = trimmed.substring(7).trim();
-			}
-		}
+		// REMOVED: First pass for @char commands (we'll process them inline)
 		
-		// Second pass: parse instructions
+		// Second pass: parse instructions (now includes @ commands)
 		while (i < lines.length) {
 			var line = lines[i];
 			lineNum = i + 1;
@@ -120,8 +95,42 @@ class ScriptParser {
 				continue;
 			}
 			
-			// Skip @ commands (already processed)
+			// Process @ commands inline
 			if (trimmed.startsWith("@")) {
+				try {
+					if (trimmed.startsWith("@char ")) {
+						var defStr = trimmed.substring(6).trim();
+						var parts = defStr.split("=").map(p -> p.trim());
+						if (parts.length >= 2) {
+							var name = parts[0];
+							var id = parts[1];
+							
+							// Check if this is an alias to an existing character
+							if (characters.exists(id)) {
+								// It's an alias - use the existing character's GUID
+								var existingChar = characters.get(id);
+								characters.set(name, { name: name, id: id, guid: existingChar.guid });
+								Sys.println('Defined character alias: $name -> $id (GUID: ${existingChar.guid})');
+							} else {
+								// It's a new character definition with ID
+								var guid = Script2Plot.generateGUID();
+								characters.set(name, { name: name, id: id, guid: guid });
+								// Also store by ID for alias resolution
+								characters.set(id, characters.get(name));
+								Sys.println('Defined new character: $name (ID: $id, GUID: $guid)');
+							}
+						}
+					} else if (trimmed.startsWith("@title ")) {
+						plotTitle = trimmed.substring(7).trim();
+						Sys.println('Set plot title: $plotTitle');
+					} else {
+						// Unknown @ command
+						Sys.println('Warning: Unknown command: $trimmed');
+					}
+				} catch (e:Dynamic) {
+					parserErrors.push({ line: lineNum, message: "Error processing @ command: " + e });
+				}
+				
 				i++;
 				continue;
 			}
