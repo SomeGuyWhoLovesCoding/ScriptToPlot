@@ -1,6 +1,6 @@
 # Plot2Script & ScriptToPlot
 
-#### Not ScriptToPlot 2, now ScriptToPlot Version 2, it's Script2Plot.
+#### Not ScriptToPlot 2, not ScriptToPlot Version 2, it's Script2Plot.
 
 A powerful tool for creating Plotagon animations using a simple script format. Convert text scripts into Plotagon `.plotdoc` files and vice versa.
 
