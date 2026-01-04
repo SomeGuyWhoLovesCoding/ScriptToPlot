@@ -78,15 +78,55 @@ class ScriptParser {
 		
 		var lines = script.split('\n');
 		var instructions:Array<PlotagonPlotInstruction> = [];
+		
+		// FIRST: Process @title
+		for (i in 0...lines.length) {
+			var line = lines[i];
+			var trimmed = line.trim();
+			
+			if (trimmed.startsWith("@title ")) {
+				plotTitle = trimmed.substring(7).trim();
+				Sys.println('Set plot title: $plotTitle');
+				break; // Only first @title matters
+			}
+		}
+		
+		// SECOND: Process @chrpjtl commands and load projections
+		for (i in 0...lines.length) {
+			var line = lines[i];
+			var trimmed = line.trim();
+			
+			if (trimmed.startsWith("@chrpjtl ")) {
+				var projectionFile = trimmed.substring(8).trim();
+				try {
+					loadCharacterProjection(projectionFile);
+				} catch (e:Dynamic) {
+					Sys.println('Error loading character projection from $projectionFile: $e');
+					parserErrors.push({ line: i + 1, message: "Failed to load character projection: " + projectionFile });
+				}
+			}
+		}
+		
+		// THIRD: Process @char commands from main script (overrides projections)
+		for (i in 0...lines.length) {
+			var line = lines[i];
+			var trimmed = line.trim();
+			var lineNum = i + 1;
+			
+			if (trimmed.startsWith("@char ")) {
+				try {
+					processCharCommand(trimmed.substring(6).trim(), lineNum);
+				} catch (e:Dynamic) {
+					parserErrors.push({ line: lineNum, message: "Error processing @char command: " + e });
+				}
+			}
+		}
+		
+		// FOURTH: Parse actual script instructions (skip @ commands)
 		var i = 0;
-		var lineNum = 0;
-		
-		// REMOVED: First pass for @char commands (we'll process them inline)
-		
-		// Second pass: parse instructions (now includes @ commands)
 		while (i < lines.length) {
 			var line = lines[i];
-			lineNum = i + 1;
+			var lineNum = i + 1;
 			var trimmed = line.trim();
 			
 			// Skip empty lines
@@ -95,61 +135,24 @@ class ScriptParser {
 				continue;
 			}
 			
-			// Process @ commands inline
+			// Skip @ commands that were already processed
 			if (trimmed.startsWith("@")) {
-				try {
-					if (trimmed.startsWith("@char ")) {
-						var defStr = trimmed.substring(6).trim();
-						var parts = defStr.split("=").map(p -> p.trim());
-						if (parts.length >= 2) {
-							var name = parts[0];
-							var id = parts[1];
-							
-							// Check if this is an alias to an existing character
-							if (characters.exists(id)) {
-								// It's an alias - use the existing character's GUID
-								var existingChar = characters.get(id);
-								characters.set(name, { name: name, id: id, guid: existingChar.guid });
-								Sys.println('Defined character alias: $name -> $id (GUID: ${existingChar.guid})');
-							} else {
-								// It's a new character definition with ID
-								var guid = Script2Plot.generateGUID();
-								characters.set(name, { name: name, id: id, guid: guid });
-								// Also store by ID for alias resolution
-								characters.set(id, characters.get(name));
-								Sys.println('Defined new character: $name (ID: $id, GUID: $guid)');
-							}
-						}
-					} else if (trimmed.startsWith("@title ")) {
-						plotTitle = trimmed.substring(7).trim();
-						Sys.println('Set plot title: $plotTitle');
-					} else {
-						// Unknown @ command
-						Sys.println('Warning: Unknown command: $trimmed');
-					}
-				} catch (e:Dynamic) {
-					parserErrors.push({ line: lineNum, message: "Error processing @ command: " + e });
-				}
-				
 				i++;
 				continue;
 			}
 			
 			// Check for comments - but be careful about dialogue lines
-			// Dialogue lines have the pattern Character(expression)
 			var dialoguePattern = ~/^\w+\([^)]+\)$/;
 			if (trimmed.startsWith("#") && !dialoguePattern.match(trimmed)) {
-				// Only skip if it's a standalone comment AND not a dialogue header
 				i++;
 				continue;
 			}
 			
 			try {
-				// Try to parse as dialogue first (most common)
+				// Try to parse as dialogue first
 				var dialogue = parseDialogueInstruction(lines, i);
 				if (dialogue != null) {
 					instructions.push(dialogue);
-					// Skip lines that were consumed by dialogue parsing
 					var consumedLines = countDialogueLines(lines, i);
 					i += consumedLines;
 					continue;
@@ -157,7 +160,6 @@ class ScriptParser {
 				
 				// If not dialogue, try other instruction types
 				var cleanLine = line;
-				// Remove end-of-line comments (but preserve # in middle like #BREATH02#)
 				var commentIndex = line.indexOf("#");
 				if (commentIndex != -1 && line.trim().startsWith("#")) {
 					cleanLine = line.substring(0, commentIndex).trim();
@@ -180,7 +182,6 @@ class ScriptParser {
 				} else if (tocheck.startsWith("music ")) {
 					instructions.push(parseMusicInstruction(cleanLine.substring(6)));
 				} else if (tocheck.startsWith("/settime")) {
-					// Handle standalone /settime lines
 					var textInstruction:PlotagonPlotInstruction = {
 						type: "textPlate",
 						parameters: {
@@ -195,8 +196,6 @@ class ScriptParser {
 					};
 					instructions.push(textInstruction);
 				} else {
-					// This line doesn't match any pattern
-					// It might be malformed dialogue or unexpected content
 					parserErrors.push({ line: lineNum, message: "Unrecognized instruction: " + trimmed });
 				}
 			} catch (e:Dynamic) {
@@ -222,8 +221,6 @@ class ScriptParser {
 		instructions.unshift(titleInstruction);
 		
 		var plotId = Script2Plot.generateGUID();
-
-		// Converting `Date` to ISO 8601 standard format.
 		var plotTime = getISO8601DateTimeNoMs();
 		
 		return {
@@ -239,6 +236,58 @@ class ScriptParser {
 				instructions: instructions
 			}
 		};
+	}
+	
+	function loadCharacterProjection(projectionFile:String) {
+		Sys.println('Loading character projection from: $projectionFile');
+		
+		var content = File.getContent(projectionFile);
+		var lines = content.split('\n');
+		var loadedChars = 0;
+		
+		// Simple: just load @char commands, ignore everything else
+		for (line in lines) {
+			var trimmed = line.trim();
+			if (trimmed.startsWith("@char ")) {
+				// Extract and process but don't track line numbers for projections
+				var defStr = trimmed.substring(6).trim();
+				processCharCommand(defStr, 0, true); // 0 line num for projections
+				loadedChars++;
+			}
+			// Ignore @title, @chpjtl, and all other content in projection files
+			// This keeps it simple and focused on character definitions only
+		}
+		
+		Sys.println('  Loaded $loadedChars characters from projection');
+	}
+	
+	function processCharCommand(defStr:String, lineNum:Int, fromProjection:Bool = false) {
+		var parts = defStr.split("=").map(p -> p.trim());
+		if (parts.length >= 2) {
+			var name = parts[0];
+			var id = parts[1];
+			
+			if (characters.exists(id)) {
+				// It's an alias to an existing character
+				var existingChar = characters.get(id);
+				characters.set(name, { name: name, id: id, guid: existingChar.guid });
+				if (!fromProjection) {
+					Sys.println('Line $lineNum: Defined character alias: $name -> $id (GUID: ${existingChar.guid})');
+				}
+			} else {
+				// New character
+				var guid = Script2Plot.generateGUID();
+				characters.set(name, { name: name, id: id, guid: guid });
+				// Also store by ID for alias resolution
+				characters.set(id, characters.get(name));
+				
+				if (!fromProjection) {
+					Sys.println('Line $lineNum: Defined new character: $name (ID: $id, GUID: $guid)');
+				} else {
+					Sys.println('    Projection character: $name -> $id');
+				}
+			}
+		}
 	}
 
 	function getISO8601DateTimeNoMs():String {
@@ -1102,36 +1151,59 @@ class Script2Plot {
     
     static function showSyntaxReference() {
         Sys.println("=== Plot2Script Syntax Reference ===\n");
-        Sys.println("Character Definitions:");
-        Sys.println("  @char Name = character_id");
-        Sys.println("  @char Alias = ExistingChar");
-        Sys.println("  @title Plot Title\n");
+        Sys.println("COMMANDS (Processed in Order):");
+        Sys.println("  1. @title Plot Title");
+        Sys.println("  2. @chpjtl filename.s2ps  (load character projection)");
+        Sys.println("  3. @char definitions");
+        Sys.println("  4. Script instructions");
+        Sys.println("");
         
-        Sys.println("Scene:");
+        Sys.println("CHARACTER PROJECTIONS (Filesize Optimization):");
+        Sys.println("  Projection files contain ONLY @char commands");
+        Sys.println("  Example (chars.s2ps):");
+        Sys.println("    @char a = id_a");
+        Sys.println("    @char b = id_b");
+        Sys.println("    @char c = id_c");
+        Sys.println("    @char d = id_d");
+        Sys.println("");
+        Sys.println("  Main script loads them:");
+        Sys.println("    @chpjtl chars.s2ps");
+        Sys.println("    @char Hero = a      # Create alias");
+        Sys.println("    @char Sidekick = b  # Another alias");
+        Sys.println("    # Characters 'c' and 'd' are also available directly");
+        Sys.println("");
+        
+        Sys.println("OVERRIDE RULES:");
+        Sys.println("  Main script @char commands override projection characters");
+        Sys.println("  Later @char commands override earlier ones");
+        Sys.println("  Simple flat structure - no nested projections");
+        Sys.println("");
+        
+        Sys.println("SCENE:");
         Sys.println("  Scene scene=id loc1=l1 loc2=l2 actor1=A1 actor2=A2 camera=1 volume=0.8 extras=true");
         Sys.println("");
         
-        Sys.println("Dialogue:");
+        Sys.println("DIALOGUE:");
         Sys.println("  Character(expression)");
         Sys.println("  vol=0.8 cam=2  (optional parameter line)");
         Sys.println("  Dialogue text here");
         Sys.println("");
         
-        Sys.println("Action:");
+        Sys.println("ACTION:");
         Sys.println("  Action type=wave char=C1 target=C2 cam=2");
         Sys.println("");
         
-        Sys.println("Effect:");
+        Sys.println("EFFECT:");
         Sys.println("  Effect /fadeinb /fadeoutb /fadeinw /fadeoutw");
         Sys.println("  Effect /fadeinp /fadeoutp /vignette /retro");
         Sys.println("  Effect /old /bloom:0.5 /setfov:1.2 /normal");
         Sys.println("");
         
-        Sys.println("Textplate:");
+        Sys.println("TEXTPLATE:");
         Sys.println("  Textplate char=C1 align=center vol=0.7: Text content here");
         Sys.println("");
         
-        Sys.println("Sound/Music:");
+        Sys.println("SOUND/MUSIC:");
         Sys.println("  Sound sound=id vol=0.6");
         Sys.println("  Music music=id vol=0.4");
         Sys.println("");
