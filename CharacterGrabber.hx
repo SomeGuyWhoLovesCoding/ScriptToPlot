@@ -81,7 +81,7 @@ class CharacterGrabber {
             var parsed:PlotagonCharacterJSON = Json.parse(json);
             */
 
-            output.writeString('@char ${character.split("_").join(" ").replace("_", " = ").replace(".pcd", "")}\n');
+            output.writeString('@char ${character.split("_").join(" = ").replace(".pcd", "")}\n');
             Sys.println('Map out character'/* + '${parsed.name} (${parsed.gender})'*/ + ' ($character)\n');
         }
 
