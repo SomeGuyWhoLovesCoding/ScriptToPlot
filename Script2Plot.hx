@@ -1065,7 +1065,7 @@ class Script2Plot {
                     var json = myOwnStringifyCuzPlotagonForcesJsonOrdering(plotDoc);
                     
                     if (outputFile == null)
-						outputFile = '${plotDoc.id}.plotdoc';
+						outputFile = plotDoc.id;
 					else
 						plotDoc.id = outputFile;
 
